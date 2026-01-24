@@ -18,7 +18,7 @@ const PATH_CAM_1: &str = "/data/cam1/";
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    let mqtt_host = var("MQTT_HOST").unwrap_or_else(|_| "mqtt".to_string());
+    let mqtt_host = var("MQTT_HOST").unwrap_or_else(|_| "192.168.100.2".to_string());
     let mut mqttoptions = MqttOptions::new("test-client2", &mqtt_host, 1883);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 

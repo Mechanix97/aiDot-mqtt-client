@@ -20,7 +20,7 @@ services:
       selenium:
         condition: service_healthy
     env_file:
-      - aiDot.env
+      - .env
     volumes:
       - ./data:/data
     restart: unless-stopped
