@@ -9,9 +9,3 @@ services:
       - SE_NODE_MAX_SESSIONS=2
       - SE_VNC_NO_PASSWORD=1
 
-  mqtt:
-    image: eclipse-mosquitto:2
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
