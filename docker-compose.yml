@@ -8,11 +8,17 @@ services:
       - SE_NODE_MAX_SESSIONS=2
       - SE_VNC_NO_PASSWORD=1
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4444/wd/hub/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   app:
     build: .
     depends_on:
-      - selenium
+      selenium:
+        condition: service_healthy
     env_file:
       - aiDot.env
     volumes:
