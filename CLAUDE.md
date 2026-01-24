@@ -63,3 +63,7 @@ Each capture generates:
 - Output paths are hardcoded in source
 - Credentials are managed via .env (never commit)
 - `.gitignore` excludes: `/target`, `.env`, `aiDot.env`, `data/*`
+
+## TODO
+
+- Replace `unwrap()` calls inside spawned Tokio tasks (`main.rs` lines ~84-86, 95, 103, 131, 138, 146). Panics inside `tokio::spawn` are silently swallowed and kill the task without propagating to main. Should add proper error handling (retry logic, logging, or graceful shutdown).

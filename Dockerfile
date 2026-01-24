@@ -17,8 +17,8 @@ RUN cargo build --release
 # ENTRYPOINT no puede hacer esto directamente, así que usamos un script
 RUN echo '#!/bin/sh\n\
 set -a\n\
-. ./aidot.env\n\
+. ./aiDot.env\n\
 set +a\n\
-cargo run --release' > start.sh && chmod +x start.sh
+./target/release/aiDot-rs' > start.sh && chmod +x start.sh
 
 CMD ["./start.sh"]

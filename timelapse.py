@@ -22,6 +22,9 @@ def crear_timelapse(fecha_str, directorio='.', salida='timelapse.avi', fps=10):
 
     # Leer la primera imagen para obtener tamaño
     primera_img = cv2.imread(os.path.join(directorio, archivos[0]))
+    if primera_img is None:
+        print(f"No se pudo leer la primera imagen: {archivos[0]}")
+        return
     alto, ancho, _ = primera_img.shape
 
     # Crear el writer del video

@@ -6,7 +6,6 @@ use std::env::var;
 use std::time::Duration;
 use thirtyfour::prelude::*;
 use thirtyfour::{By, WebDriver};
-use tokio;
 use tokio::sync::broadcast;
 use tokio::time::sleep;
 
@@ -110,7 +109,7 @@ async fn main() {
                 Ok((topic, payload)) => {
                     if topic == TOPIC_CAM_0 {
                         println!("Task 0: {:?}", String::from_utf8_lossy(&payload));
-                        take_picture(&driver, &PATH_CAM_0.to_string()).await;
+                        take_picture(&driver, PATH_CAM_0).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -153,7 +152,7 @@ async fn main() {
                 Ok((topic, payload)) => {
                     if topic == TOPIC_CAM_1 {
                         println!("Task 1: {:?}", String::from_utf8_lossy(&payload));
-                        take_picture(&driver, &PATH_CAM_1.to_string()).await;
+                        take_picture(&driver, PATH_CAM_1).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -197,7 +196,7 @@ fn get_timestamp() -> String {
     )
 }
 
-async fn driver_sign_in(driver: &WebDriver, user: &String, pass: &String) {
+async fn driver_sign_in(driver: &WebDriver, user: &str, pass: &str) {
     driver.goto("https://app.aidot.com/SignIn").await.unwrap();
     let current_url = driver.current_url().await.unwrap().to_string();
     if current_url.contains("/SignIn") {
@@ -251,8 +250,8 @@ async fn wait_for_video(driver: &WebDriver) -> Option<thirtyfour::WebElement> {
     None
 }
 
-async fn take_picture(driver: &WebDriver, path: &String) {
-    match &wait_for_video(&driver).await {
+async fn take_picture(driver: &WebDriver, path: &str) {
+    match wait_for_video(driver).await {
         Some(video_elem) => {
             // Tomar captura de pantalla solo del elemento <video>
             println!("📸 Tomando captura del elemento <video>...");
@@ -265,7 +264,7 @@ async fn take_picture(driver: &WebDriver, path: &String) {
         None => {
             println!("❌ No se pudo cargar el video con dimensiones válidas");
             driver.refresh().await.unwrap();
-            while wait_for_video(&driver).await.is_none() {
+            while wait_for_video(driver).await.is_none() {
                 sleep(Duration::from_secs(1)).await;
             }
         }
