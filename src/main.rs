@@ -5,7 +5,7 @@ use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use std::env::var;
 use std::time::Duration;
 use thirtyfour::prelude::*;
-use thirtyfour::{By, WebDriver};
+use thirtyfour::{By, ChromeCapabilities, WebDriver};
 use tokio::sync::broadcast;
 use tokio::time::sleep;
 
@@ -76,95 +76,15 @@ async fn main() {
     let caps_clone = caps.clone();
     let user_clone = user.clone();
     let pass_clone = pass.clone();
-    // task 0
-    let mut rx_a = tx.subscribe();
-    tokio::spawn(async move {
-        println!("Spawn task 0");
-        let driver = WebDriver::new("http://localhost:9515", caps_clone)
-            .await
-            .unwrap();
+    let rx_0 = tx.subscribe();
+    tokio::spawn(camera_task(
+        0, caps_clone, user_clone, pass_clone, url_cam_0, TOPIC_CAM_0, PATH_CAM_0, rx_0,
+    ));
 
-        driver_sign_in(&driver, &user_clone, &pass_clone).await;
-
-        println!("✅ Login exitoso");
-        tokio::time::sleep(Duration::from_secs(5)).await;
-
-        // Ir a la vista de la cámara
-        // Suponiendo que `driver` ya está inicializado
-        driver.goto(url_cam_0).await.unwrap();
-
-        // Wait for initial video load
-        let mut retries = 0;
-        while wait_for_video(&driver).await.is_none() {
-            sleep(Duration::from_secs(1)).await;
-            retries += 1;
-            if retries >= 30 {
-                driver.refresh().await.unwrap();
-                retries = 0;
-            }
-        }
-
-        loop {
-            match rx_a.recv().await {
-                Ok((topic, payload)) => {
-                    if topic == TOPIC_CAM_0 {
-                        println!("Task 0: {:?}", String::from_utf8_lossy(&payload));
-                        take_picture(&driver, PATH_CAM_0).await;
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    println!("Task 0: skipped {} messages", n);
-                }
-                Err(broadcast::error::RecvError::Closed) => {
-                    println!("Task 0: channel closed");
-                    break;
-                }
-            }
-        }
-    });
-
-    // task 1
-    let mut rx_a = tx.subscribe();
-    tokio::spawn(async move {
-        println!("Spawn task 1");
-        let driver = WebDriver::new("http://localhost:9515", caps).await.unwrap();
-
-        driver_sign_in(&driver, &user, &pass).await;
-
-        println!("✅ Login exitoso");
-        tokio::time::sleep(Duration::from_secs(5)).await;
-
-        driver.goto(url_cam_1).await.unwrap();
-
-        // Wait for initial video load
-        let mut retries = 0;
-        while wait_for_video(&driver).await.is_none() {
-            sleep(Duration::from_secs(1)).await;
-            retries += 1;
-            if retries >= 30 {
-                driver.refresh().await.unwrap();
-                retries = 0;
-            }
-        }
-
-        loop {
-            match rx_a.recv().await {
-                Ok((topic, payload)) => {
-                    if topic == TOPIC_CAM_1 {
-                        println!("Task 1: {:?}", String::from_utf8_lossy(&payload));
-                        take_picture(&driver, PATH_CAM_1).await;
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    println!("Task 1: skipped {} messages", n);
-                }
-                Err(broadcast::error::RecvError::Closed) => {
-                    println!("Task 1: channel closed");
-                    break;
-                }
-            }
-        }
-    });
+    let rx_1 = tx.subscribe();
+    tokio::spawn(camera_task(
+        1, caps, user, pass, url_cam_1, TOPIC_CAM_1, PATH_CAM_1, rx_1,
+    ));
 
     loop {
         client
@@ -179,6 +99,56 @@ async fn main() {
         println!("TICK {}", get_timestamp());
 
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    }
+}
+
+async fn camera_task(
+    id: u8,
+    caps: ChromeCapabilities,
+    user: String,
+    pass: String,
+    cam_url: String,
+    topic: &str,
+    path: &str,
+    mut rx: broadcast::Receiver<(String, Vec<u8>)>,
+) {
+    println!("Spawn task {}", id);
+    let driver = WebDriver::new("http://localhost:9515", caps)
+        .await
+        .unwrap();
+
+    driver_sign_in(&driver, &user, &pass).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    driver.goto(&cam_url).await.unwrap();
+
+    // Wait for initial video load
+    let mut retries = 0;
+    while wait_for_video(&driver).await.is_none() {
+        sleep(Duration::from_secs(1)).await;
+        retries += 1;
+        if retries >= 30 {
+            driver.refresh().await.unwrap();
+            retries = 0;
+        }
+    }
+
+    loop {
+        match rx.recv().await {
+            Ok((msg_topic, payload)) => {
+                if msg_topic == topic {
+                    println!("Task {}: {:?}", id, String::from_utf8_lossy(&payload));
+                    take_picture(&driver, path).await;
+                }
+            }
+            Err(broadcast::error::RecvError::Lagged(n)) => {
+                println!("Task {}: skipped {} messages", id, n);
+            }
+            Err(broadcast::error::RecvError::Closed) => {
+                println!("Task {}: channel closed", id);
+                break;
+            }
+        }
     }
 }
 
