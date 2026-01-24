@@ -1,0 +1,17 @@
+services:
+  selenium:
+    image: selenium/standalone-chrome:latest
+    ports:
+      - "9515:4444"
+      - "7900:7900"
+    shm_size: "2g"
+    environment:
+      - SE_NODE_MAX_SESSIONS=2
+      - SE_VNC_NO_PASSWORD=1
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
