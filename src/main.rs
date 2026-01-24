@@ -1,16 +1,10 @@
 use chrono::{Datelike, FixedOffset, Timelike, Utc};
 use dotenv::dotenv;
-use log::error;
-use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use std::env::var;
 use std::time::Duration;
 use thirtyfour::prelude::*;
 use thirtyfour::{By, ChromeCapabilities, WebDriver};
-use tokio::sync::broadcast;
 use tokio::time::sleep;
-
-const TOPIC_CAM_0: &str = "aidot/get/cam0";
-const TOPIC_CAM_1: &str = "aidot/get/cam1";
 
 const PATH_CAM_0: &str = "/data/cam0/";
 const PATH_CAM_1: &str = "/data/cam1/";
@@ -18,23 +12,6 @@ const PATH_CAM_1: &str = "/data/cam1/";
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    let mqtt_host = var("MQTT_HOST").unwrap_or_else(|_| "192.168.100.2".to_string());
-    let mqtt_port: u16 = var("MQTT_PORT").unwrap_or_else(|_| "1883".to_string()).parse().expect("MQTT_PORT must be a valid port number");
-    let mut mqttoptions = MqttOptions::new("test-client2", &mqtt_host, mqtt_port);
-    mqttoptions.set_keep_alive(Duration::from_secs(5));
-
-    // Create the client and event loop
-    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-
-    if let Err(e) = client.subscribe(TOPIC_CAM_0, QoS::AtLeastOnce).await {
-        error!("Failed to subscribe: {:?}", e);
-        return;
-    }
-
-    if let Err(e) = client.subscribe(TOPIC_CAM_1, QoS::AtLeastOnce).await {
-        error!("Failed to subscribe: {:?}", e);
-        return;
-    }
 
     let user = var("AIDOT_USER").expect("Missing AIDOT_USER in environment");
     let pass = var("AIDOT_PASSWORD").expect("Missing AIDOT_PASSWORD in environment");
@@ -43,7 +20,6 @@ async fn main() {
 
     let mut caps = DesiredCapabilities::chrome();
 
-    /* chrome args */
     caps.add_arg("--no-sandbox").unwrap();
     caps.add_arg("--disable-setuid-sandbox").unwrap();
     caps.add_arg("--use-fake-ui-for-media-stream").unwrap();
@@ -52,52 +28,19 @@ async fn main() {
     caps.add_arg("--autoplay-policy=no-user-gesture-required").unwrap();
     caps.add_arg("--disable-features=IsolateOrigins,site-per-process").unwrap();
 
-    let (tx, _) = broadcast::channel::<(String, Vec<u8>)>(32);
-
-    // Task de recepción MQTT
-    let tx_clone = tx.clone();
-    tokio::spawn(async move {
-        loop {
-            match eventloop.poll().await {
-                Ok(Event::Incoming(Incoming::ConnAck(_))) => {
-                    //  println!("Connected to broker!");
-                }
-                Ok(Event::Incoming(Incoming::Publish(p))) => {
-                    let _ = tx_clone.send((p.topic.clone(), p.payload.to_vec()));
-                }
-                Ok(_) => {}
-                Err(_e) => {}
-            }
-        }
-    });
-
     let caps_clone = caps.clone();
     let user_clone = user.clone();
     let pass_clone = pass.clone();
-    let rx_0 = tx.subscribe();
-    tokio::spawn(camera_task(
-        0, caps_clone, user_clone, pass_clone, url_cam_0, TOPIC_CAM_0, PATH_CAM_0, rx_0,
+
+    let t0 = tokio::spawn(camera_task(
+        0, caps_clone, user_clone, pass_clone, url_cam_0, PATH_CAM_0,
     ));
 
-    let rx_1 = tx.subscribe();
-    tokio::spawn(camera_task(
-        1, caps, user, pass, url_cam_1, TOPIC_CAM_1, PATH_CAM_1, rx_1,
+    let t1 = tokio::spawn(camera_task(
+        1, caps, user, pass, url_cam_1, PATH_CAM_1,
     ));
 
-    loop {
-        client
-            .publish(TOPIC_CAM_0, QoS::AtLeastOnce, false, "")
-            .await
-            .unwrap();
-        client
-            .publish(TOPIC_CAM_1, QoS::AtLeastOnce, false, "")
-            .await
-            .unwrap();
-
-        println!("TICK {}", get_timestamp());
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-    }
+    let _ = tokio::join!(t0, t1);
 }
 
 async fn camera_task(
@@ -106,9 +49,7 @@ async fn camera_task(
     user: String,
     pass: String,
     cam_url: String,
-    topic: &str,
     path: &str,
-    mut rx: broadcast::Receiver<(String, Vec<u8>)>,
 ) {
     println!("Spawn task {}", id);
     std::fs::create_dir_all(path).unwrap();
@@ -118,7 +59,7 @@ async fn camera_task(
         .unwrap();
 
     driver_sign_in(&driver, &user, &pass).await;
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    sleep(Duration::from_secs(5)).await;
 
     driver.goto(&cam_url).await.unwrap();
 
@@ -134,21 +75,9 @@ async fn camera_task(
     }
 
     loop {
-        match rx.recv().await {
-            Ok((msg_topic, payload)) => {
-                if msg_topic == topic {
-                    println!("Task {}: {:?}", id, String::from_utf8_lossy(&payload));
-                    take_picture(&driver, path).await;
-                }
-            }
-            Err(broadcast::error::RecvError::Lagged(n)) => {
-                println!("Task {}: skipped {} messages", id, n);
-            }
-            Err(broadcast::error::RecvError::Closed) => {
-                println!("Task {}: channel closed", id);
-                break;
-            }
-        }
+        take_picture(&driver, path).await;
+        println!("TICK cam{} {}", id, get_timestamp());
+        sleep(Duration::from_secs(10)).await;
     }
 }
 
@@ -170,7 +99,6 @@ async fn driver_sign_in(driver: &WebDriver, user: &str, pass: &str) {
     driver.goto("https://app.aidot.com/SignIn").await.unwrap();
     let current_url = driver.current_url().await.unwrap().to_string();
     if current_url.contains("/SignIn") {
-        // Rellenar campos de login
         tokio::time::sleep(Duration::from_secs(3)).await;
 
         let username = driver
@@ -197,7 +125,6 @@ async fn driver_sign_in(driver: &WebDriver, user: &str, pass: &str) {
     }
 }
 
-// Función para esperar a que el video tenga dimensiones válidas y devolver el elemento
 async fn wait_for_video(driver: &WebDriver) -> Option<thirtyfour::WebElement> {
     let script = r#"
         let video = document.querySelector('video');
@@ -207,7 +134,6 @@ async fn wait_for_video(driver: &WebDriver) -> Option<thirtyfour::WebElement> {
     match driver.execute(script, vec![]).await {
         Ok(result) => {
             if result.json().as_bool().unwrap_or(false) {
-                // Obtener el elemento <video> cuando esté listo
                 let video_elem = driver.query(By::Css("video")).first().await.unwrap();
                 return Some(video_elem);
             }
@@ -223,16 +149,14 @@ async fn wait_for_video(driver: &WebDriver) -> Option<thirtyfour::WebElement> {
 async fn take_picture(driver: &WebDriver, path: &str) {
     match wait_for_video(driver).await {
         Some(video_elem) => {
-            // Tomar captura de pantalla solo del elemento <video>
-            println!("📸 Tomando captura del elemento <video>...");
             let screenshot = video_elem.screenshot_as_png().await.unwrap();
             let filename = format!("{}{}.png", path, get_timestamp());
             std::fs::write(format!("{}now.png", path), &screenshot).unwrap();
             std::fs::write(&filename, &screenshot).unwrap();
-            println!("✅ Captura guardada como {}", filename);
+            println!("Captura guardada: {}", filename);
         }
         None => {
-            println!("❌ No se pudo cargar el video con dimensiones válidas");
+            println!("Video no disponible, refrescando...");
             driver.refresh().await.unwrap();
             while wait_for_video(driver).await.is_none() {
                 sleep(Duration::from_secs(1)).await;
