@@ -22,5 +22,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/data
+      - /home/lucas/home-assistant/data:/data
     restart: unless-stopped
