@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 CAMERAS = {
     "cam0": "/home/lucas/home-assistant/data/cam0/",
@@ -16,7 +16,7 @@ FPS = 30
 # 0 0 * * * python3 /home/lucas/aiDot-mqtt-client/timelapse.py
 
 # Manual run
-# python3 timelapse.py 20260124 --no-delete   # genera video sin borrar
+# python3 timelapse.py 20260124 --no-delete 
 # python3 timelapse.py 20260124 
 # python3 timelapse.py --no-delete
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     flags = [a for a in sys.argv[1:] if a.startswith("--")]
 
-    date = args[0] if args else (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+    date = args[0] if args else datetime.now().strftime("%Y%m%d")
     delete = "--no-delete" not in flags
 
     print(f"Processing date: {date}")
