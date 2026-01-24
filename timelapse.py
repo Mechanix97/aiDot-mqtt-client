@@ -9,7 +9,7 @@ CAMERAS = {
 }
 
 OUTPUT_DIR = "/mnt/hdd/timelapses/"
-FPS = 15
+FPS = 30
 
 #  Add to cron
 # crontab -e
@@ -50,8 +50,8 @@ def create_timelapse(date_str):
             "-f", "concat", "-safe", "0",
             "-i", list_file,
             "-vcodec", "libx264",
-            "-crf", "28",
-            "-preset", "fast",
+            "-crf", "23",
+            "-preset", "medium",
             "-pix_fmt", "yuv420p",
             output_file
         ]

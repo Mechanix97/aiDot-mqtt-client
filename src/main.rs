@@ -8,6 +8,7 @@ use tokio::time::sleep;
 
 const PATH_CAM_0: &str = "/data/cam0/";
 const PATH_CAM_1: &str = "/data/cam1/";
+const CAPTURE_INTERVAL: u64 = 5;
 
 #[tokio::main]
 async fn main() {
@@ -76,8 +77,7 @@ async fn camera_task(
 
     loop {
         take_picture(&driver, path).await;
-        println!("TICK cam{} {}", id, get_timestamp());
-        sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(CAPTURE_INTERVAL)).await;
     }
 }
 
