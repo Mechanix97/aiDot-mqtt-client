@@ -1,6 +1,6 @@
 use chrono::{Datelike, FixedOffset, Timelike, Utc};
 use dotenv::dotenv;
-use log::{error, info};
+use log::error;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use std::env::var;
 use std::time::Duration;
@@ -94,22 +94,31 @@ async fn main() {
         // Suponiendo que `driver` ya está inicializado
         driver.goto(url_cam_0).await.unwrap();
 
+        // Wait for initial video load
+        let mut retries = 0;
+        while wait_for_video(&driver).await.is_none() {
+            sleep(Duration::from_secs(1)).await;
+            retries += 1;
+            if retries >= 30 {
+                driver.refresh().await.unwrap();
+                retries = 0;
+            }
+        }
+
         loop {
-            if !rx_a.is_empty() {
-                if let Ok((topic, payload)) = rx_a.recv().await {
+            match rx_a.recv().await {
+                Ok((topic, payload)) => {
                     if topic == TOPIC_CAM_0 {
                         println!("Task 0: {:?}", String::from_utf8_lossy(&payload));
-
                         take_picture(&driver, &PATH_CAM_0.to_string()).await;
                     }
                 }
-            }
-            let mut i: i32 = 0;
-            while wait_for_video(&driver).await.is_none() {
-                sleep(Duration::from_secs(1)).await;
-                i += 1;
-                if i == 30 {
-                    driver.refresh().await.unwrap();
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    println!("Task 0: skipped {} messages", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    println!("Task 0: channel closed");
+                    break;
                 }
             }
         }
@@ -128,22 +137,31 @@ async fn main() {
 
         driver.goto(url_cam_1).await.unwrap();
 
+        // Wait for initial video load
+        let mut retries = 0;
+        while wait_for_video(&driver).await.is_none() {
+            sleep(Duration::from_secs(1)).await;
+            retries += 1;
+            if retries >= 30 {
+                driver.refresh().await.unwrap();
+                retries = 0;
+            }
+        }
+
         loop {
-            if !rx_a.is_empty() {
-                if let Ok((topic, payload)) = rx_a.recv().await {
+            match rx_a.recv().await {
+                Ok((topic, payload)) => {
                     if topic == TOPIC_CAM_1 {
                         println!("Task 1: {:?}", String::from_utf8_lossy(&payload));
-
                         take_picture(&driver, &PATH_CAM_1.to_string()).await;
                     }
                 }
-            }
-            let mut i: i32 = 0;
-            while wait_for_video(&driver).await.is_none() {
-                sleep(Duration::from_secs(1)).await;
-                i += 1;
-                if i == 30 {
-                    driver.refresh().await.unwrap();
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    println!("Task 1: skipped {} messages", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    println!("Task 1: channel closed");
+                    break;
                 }
             }
         }
