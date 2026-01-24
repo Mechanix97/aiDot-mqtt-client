@@ -19,7 +19,8 @@ const PATH_CAM_1: &str = "/data/cam1/";
 async fn main() {
     dotenv().ok();
     let mqtt_host = var("MQTT_HOST").unwrap_or_else(|_| "192.168.100.2".to_string());
-    let mut mqttoptions = MqttOptions::new("test-client2", &mqtt_host, 1883);
+    let mqtt_port: u16 = var("MQTT_PORT").unwrap_or_else(|_| "1883".to_string()).parse().expect("MQTT_PORT must be a valid port number");
+    let mut mqttoptions = MqttOptions::new("test-client2", &mqtt_host, mqtt_port);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
     // Create the client and event loop
