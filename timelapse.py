@@ -16,9 +16,11 @@ FPS = 30
 # 0 0 * * * python3 /home/lucas/aiDot-mqtt-client/timelapse.py
 
 # Manual run
-# python3 timelapse.py 20260124
+# python3 timelapse.py 20260124 --no-delete   # genera video sin borrar
+# python3 timelapse.py 20260124 
+# python3 timelapse.py --no-delete
 
-def create_timelapse(date_str):
+def create_timelapse(date_str, delete=True):
     for cam, directory in CAMERAS.items():
         files = sorted([
             f for f in os.listdir(directory)
@@ -60,10 +62,10 @@ def create_timelapse(date_str):
 
         if result.returncode == 0:
             print(f"[{cam}] Video saved: {output_file}")
-            # Delete processed images
-            for filename in files:
-                os.remove(os.path.join(directory, filename))
-            print(f"[{cam}] {len(files)} images deleted")
+            if delete:
+                for filename in files:
+                    os.remove(os.path.join(directory, filename))
+                print(f"[{cam}] {len(files)} images deleted")
         else:
             print(f"[{cam}] Error creating video: {result.stderr}")
 
@@ -72,11 +74,11 @@ def create_timelapse(date_str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        date = sys.argv[1]
-    else:
-        # Default: process yesterday
-        date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+
+    date = args[0] if args else (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+    delete = "--no-delete" not in flags
 
     print(f"Processing date: {date}")
-    create_timelapse(date)
+    create_timelapse(date, delete=delete)
