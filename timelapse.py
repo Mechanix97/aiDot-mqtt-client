@@ -1,48 +1,82 @@
-import cv2
 import os
-from datetime import datetime
+import subprocess
+import sys
+from datetime import datetime, timedelta
 
-def crear_timelapse(fecha_str, directorio='.', salida='timelapse.avi', fps=10):
-    # Validar formato de fecha
-    try:
-        datetime.strptime(fecha_str, '%Y%m%d')
-    except ValueError:
-        print("La fecha debe estar en formato YYYYMMDD.")
-        return
+CAMERAS = {
+    "cam0": "/home/lucas/home-assistant/data/cam0/",
+    "cam1": "/home/lucas/home-assistant/data/cam1/",
+}
 
-    # Buscar archivos que empiecen con la fecha
-    archivos = sorted([
-        f for f in os.listdir(directorio)
-        if f.startswith(fecha_str) and f.lower().endswith(('.jpg', '.jpeg', '.png'))
-    ])
+OUTPUT_DIR = "/mnt/hdd/timelapses/"
+FPS = 15
 
-    if not archivos:
-        print(f"No se encontraron imágenes que empiecen con {fecha_str}")
-        return
+#  Add to cron
+# crontab -e
+# 0 0 * * * python3 /home/lucas/aiDot-mqtt-client/timelapse.py
 
-    # Leer la primera imagen para obtener tamaño
-    primera_img = cv2.imread(os.path.join(directorio, archivos[0]))
-    if primera_img is None:
-        print(f"No se pudo leer la primera imagen: {archivos[0]}")
-        return
-    alto, ancho, _ = primera_img.shape
+# Manual run
+# python3 timelapse.py 20260124
 
-    # Crear el writer del video
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(salida, fourcc, fps, (ancho, alto))
+def create_timelapse(date_str):
+    for cam, directory in CAMERAS.items():
+        files = sorted([
+            f for f in os.listdir(directory)
+            if f.startswith(date_str) and f.endswith(".png") and f != "now.png"
+        ])
 
-    print(f"Creando timelapse con {len(archivos)} imágenes...")
-
-    for nombre in archivos:
-        path = os.path.join(directorio, nombre)
-        img = cv2.imread(path)
-        if img is None:
-            print(f"Advertencia: no se pudo leer {path}")
+        if not files:
+            print(f"[{cam}] No images found for {date_str}")
             continue
-        out.write(img)
 
-    out.release()
-    print(f"Timelapse guardado como {salida}")
+        print(f"[{cam}] {len(files)} images found")
 
-# Ejemplo de uso
-crear_timelapse('20250421', directorio='/home/lucas/home-assistant/data/cam0/', salida='output.avi', fps=15)
+        # Create output directory
+        cam_output_dir = os.path.join(OUTPUT_DIR, cam)
+        os.makedirs(cam_output_dir, exist_ok=True)
+
+        # Create temp file with image list for ffmpeg
+        list_file = f"/tmp/timelapse_{cam}.txt"
+        with open(list_file, "w") as f:
+            for filename in files:
+                path = os.path.join(directory, filename)
+                f.write(f"file '{path}'\nduration {1/FPS}\n")
+
+        output_file = os.path.join(cam_output_dir, f"{date_str}.mp4")
+
+        # Generate video with ffmpeg H.264
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", list_file,
+            "-vcodec", "libx264",
+            "-crf", "28",
+            "-preset", "fast",
+            "-pix_fmt", "yuv420p",
+            output_file
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            print(f"[{cam}] Video saved: {output_file}")
+            # Delete processed images
+            for filename in files:
+                os.remove(os.path.join(directory, filename))
+            print(f"[{cam}] {len(files)} images deleted")
+        else:
+            print(f"[{cam}] Error creating video: {result.stderr}")
+
+        # Clean up temp file
+        os.remove(list_file)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        date = sys.argv[1]
+    else:
+        # Default: process yesterday
+        date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+
+    print(f"Processing date: {date}")
+    create_timelapse(date)
