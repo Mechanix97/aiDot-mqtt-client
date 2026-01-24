@@ -2,10 +2,18 @@ services:
   selenium:
     image: selenium/standalone-chrome:latest
     ports:
-      - "9515:4444"
       - "7900:7900"
     shm_size: "2g"
     environment:
       - SE_NODE_MAX_SESSIONS=2
       - SE_VNC_NO_PASSWORD=1
 
+  app:
+    build: .
+    depends_on:
+      - selenium
+    env_file:
+      - aiDot.env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

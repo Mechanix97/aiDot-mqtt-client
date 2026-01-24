@@ -12,13 +12,14 @@ use tokio::time::sleep;
 const TOPIC_CAM_0: &str = "aidot/get/cam0";
 const TOPIC_CAM_1: &str = "aidot/get/cam1";
 
-const PATH_CAM_0: &str = "/home/lucas/home-assistant/data/cam0/";
-const PATH_CAM_1: &str = "/home/lucas/home-assistant/data/cam1/";
+const PATH_CAM_0: &str = "/data/cam0/";
+const PATH_CAM_1: &str = "/data/cam1/";
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    let mut mqttoptions = MqttOptions::new("test-client2", "localhost", 1883);
+    let mqtt_host = var("MQTT_HOST").unwrap_or_else(|_| "mqtt".to_string());
+    let mut mqttoptions = MqttOptions::new("test-client2", &mqtt_host, 1883);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
     // Create the client and event loop
@@ -113,7 +114,9 @@ async fn camera_task(
     mut rx: broadcast::Receiver<(String, Vec<u8>)>,
 ) {
     println!("Spawn task {}", id);
-    let driver = WebDriver::new("http://localhost:9515", caps)
+    std::fs::create_dir_all(path).unwrap();
+    let webdriver_url = var("WEBDRIVER_URL").unwrap_or_else(|_| "http://selenium:4444".to_string());
+    let driver = WebDriver::new(&webdriver_url, caps)
         .await
         .unwrap();
 
