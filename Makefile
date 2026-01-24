@@ -1,16 +1,13 @@
-.PHONY: up down run build logs vnc
+.PHONY: up down build logs vnc
 
 up:
-	docker compose up -d
+	docker compose up -d --build
 
 down:
 	docker compose down
 
 build:
-	cargo build --release
-
-run: up build
-	cargo run --release
+	docker compose build
 
 logs:
 	docker compose logs -f
