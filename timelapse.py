@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 CAMERAS = {
     "cam0": "/home/lucas/home-assistant/data/cam0/",
@@ -13,12 +13,14 @@ FPS = 30
 
 #  Add to cron
 # crontab -e
-# 0 0 * * * python3 /home/lucas/aiDot-mqtt-client/timelapse.py
+# 0 0 * * * python3 /home/lucas/aiDot-mqtt-client/timelapse.py -y
 
 # Manual run
-# python3 timelapse.py 20260124 --no-delete 
-# python3 timelapse.py 20260124 
+# python3 timelapse.py 20260124 --no-delete
+# python3 timelapse.py 20260124
 # python3 timelapse.py --no-delete
+# python3 timelapse.py --yesterday
+# python3 timelapse.py -y --no-delete
 
 def create_timelapse(date_str, delete=True):
     for cam, directory in CAMERAS.items():
@@ -74,11 +76,18 @@ def create_timelapse(date_str, delete=True):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    flags = [a for a in sys.argv[1:] if a.startswith("-")]
 
-    date = args[0] if args else datetime.now().strftime("%Y%m%d")
+    yesterday = "--yesterday" in flags or "-y" in flags
     delete = "--no-delete" not in flags
+
+    if args:
+        date = args[0]
+    elif yesterday:
+        date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+    else:
+        date = datetime.now().strftime("%Y%m%d")
 
     print(f"Processing date: {date}")
     create_timelapse(date, delete=delete)
