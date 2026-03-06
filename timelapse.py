@@ -2,6 +2,15 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+
+import requests
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 CAMERAS = {
     "cam0": "/home/lucas/home-assistant/data/cam0/",
@@ -21,6 +30,24 @@ FPS = 30
 # python3 timelapse.py --no-delete
 # python3 timelapse.py --yesterday
 # python3 timelapse.py -y --no-delete
+
+def send_telegram_video(video_path, cam, date_str):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print(f"[{cam}] Telegram not configured, skipping")
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
+    with open(video_path, "rb") as video_file:
+        response = requests.post(url, data={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "caption": f"Timelapse {cam} - {date_str}",
+        }, files={"video": video_file})
+
+    if response.ok:
+        print(f"[{cam}] Video sent to Telegram")
+    else:
+        print(f"[{cam}] Telegram error: {response.status_code} {response.text}")
+
 
 def create_timelapse(date_str, delete=True):
     for cam, directory in CAMERAS.items():
@@ -64,6 +91,7 @@ def create_timelapse(date_str, delete=True):
 
         if result.returncode == 0:
             print(f"[{cam}] Video saved: {output_file}")
+            send_telegram_video(output_file, cam, date_str)
             if delete:
                 for filename in files:
                     os.remove(os.path.join(directory, filename))
