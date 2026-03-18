@@ -9,6 +9,7 @@ use tokio::time::sleep;
 const PATH_CAM_0: &str = "/data/cam0/";
 const PATH_CAM_1: &str = "/data/cam1/";
 const CAPTURE_INTERVAL: u64 = 5;
+const STALE_THRESHOLD: u32 = 3;
 
 #[tokio::main]
 async fn main() {
@@ -79,7 +80,33 @@ async fn camera_task(
         }
     }
 
+    let mut last_video_time: f64 = -1.0;
+    let mut stale_count: u32 = 0;
+
     loop {
+        match get_video_time(&driver).await {
+            Some(t) if t == last_video_time => stale_count += 1,
+            Some(t) => {
+                stale_count = 0;
+                last_video_time = t;
+            }
+            None => stale_count += 1,
+        }
+
+        if stale_count >= STALE_THRESHOLD {
+            println!(
+                "Cam {}: Stream congelado ({} ciclos sin avance), refrescando...",
+                id, stale_count
+            );
+            driver.refresh().await.unwrap();
+            while wait_for_video(&driver).await.is_none() {
+                sleep(Duration::from_secs(1)).await;
+            }
+            last_video_time = -1.0;
+            stale_count = 0;
+            continue;
+        }
+
         take_picture(&driver, path).await;
         sleep(Duration::from_secs(CAPTURE_INTERVAL)).await;
     }
@@ -126,6 +153,20 @@ async fn driver_sign_in(driver: &WebDriver, user: &str, pass: &str) {
             .await
             .unwrap();
         submit_btn.click().await.unwrap();
+    }
+}
+
+async fn get_video_time(driver: &WebDriver) -> Option<f64> {
+    let script = r#"
+        let video = document.querySelector('video');
+        if (video && video.videoWidth > 0) {
+            return video.currentTime;
+        }
+        return null;
+    "#;
+    match driver.execute(script, vec![]).await {
+        Ok(result) => result.json().as_f64(),
+        Err(_) => None,
     }
 }
 
