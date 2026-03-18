@@ -4,6 +4,9 @@ services:
     ports:
       - "7900:7900"
     shm_size: "2g"
+    tmpfs:
+      - /tmp:size=512m
+      - /home/seluser/.cache:size=256m
     environment:
       - SE_NODE_MAX_SESSIONS=2
       - SE_VNC_NO_PASSWORD=1

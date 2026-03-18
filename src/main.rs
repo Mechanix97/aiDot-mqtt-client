@@ -28,6 +28,10 @@ async fn main() {
     caps.add_arg("--allow-file-access-from-files").unwrap();
     caps.add_arg("--autoplay-policy=no-user-gesture-required").unwrap();
     caps.add_arg("--disable-features=IsolateOrigins,site-per-process").unwrap();
+    caps.add_arg("--disk-cache-size=0").unwrap();
+    caps.add_arg("--disable-application-cache").unwrap();
+    caps.add_arg("--media-cache-size=0").unwrap();
+    caps.add_arg("--aggressive-cache-discard").unwrap();
 
     let caps_clone = caps.clone();
     let user_clone = user.clone();
